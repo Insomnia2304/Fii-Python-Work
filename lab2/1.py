@@ -1,7 +1,7 @@
 def gcd(a: int, b: int) -> int:
     while b:
         a, b = b, a % b
-    return a
+    return abs(a)
 
 x = input('Enter a list of numbers separated by space: ').split()
 
