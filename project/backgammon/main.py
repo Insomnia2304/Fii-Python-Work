@@ -13,17 +13,18 @@ class Circle:
         self.color = color
         self.dragging = False
         self.on_top = False
+        self.finish = False
     def set_father(self, father):
         self.father = father
     def set_center(self, center):
         self.x = center[0]
         self.y = center[1]
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+        pygame.draw.circle(screen, self.color, (self.x, self.y), CIRCLE_RADIUS)
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and self.on_top:
             dist = ((self.x - event.pos[0])**2 + (self.y - event.pos[1])**2) ** 0.5
-            if dist <= self.radius:
+            if dist <= CIRCLE_RADIUS:
                 Circle.dragged = self
                 self.dragging = Circle.is_dragging = True
                 self.offset_x = self.x - event.pos[0]
@@ -40,6 +41,15 @@ class Circle:
                     self.father.remove_circle()
                     triangle.add_circle(self)
                     found = True
+            
+            if circle_fit_into_finish_rectangle(self, shapes['finish_rect']):
+                self.father.remove_circle()
+                self.finish = True
+                if self.color == WHITE:
+                    shapes['finish_white'] += 1
+                else:
+                    shapes['finish_red'] += 1
+                found = True
 
             if not found:
                 self.x = self.original_x
@@ -50,7 +60,8 @@ class Circle:
                 self.x = event.pos[0] + self.offset_x
                 self.y = event.pos[1] + self.offset_y
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (self.x, self.y), Circle.radius)
+        if not self.finish:
+            pygame.draw.circle(screen, self.color, (self.x, self.y), CIRCLE_RADIUS)
 
 class Triangle:
     def __init__(self, x, y, z, color):
@@ -76,15 +87,14 @@ class Triangle:
         circles_number = len(self.circles)
         if circles_number == 0:
             return
-
-        radius = self.circles[0].radius
+        
         max_height = abs(self.z[1] - self.x[1])   
         if self.z[1] > self.x[1]:
-            center = (self.x[0] + ((self.y[0] - self.x[0]) / 2), self.x[1] + radius)
+            center = (self.x[0] + ((self.y[0] - self.x[0]) / 2), self.x[1] + CIRCLE_RADIUS)
         else:
-            center = (self.x[0] + ((self.y[0] - self.x[0]) / 2), self.x[1] - radius)
+            center = (self.x[0] + ((self.y[0] - self.x[0]) / 2), self.x[1] - CIRCLE_RADIUS)
 
-        if 2 * radius * circles_number > max_height:
+        if 2 * CIRCLE_RADIUS * circles_number > max_height:
             offset = max_height / circles_number
             for circle in self.circles:
                 circle.set_center(center)
@@ -96,9 +106,9 @@ class Triangle:
             for circle in self.circles:
                 circle.set_center(center)
                 if self.z[1] > self.x[1]:
-                    center = (center[0], center[1] + 2 * radius)
+                    center = (center[0], center[1] + 2 * CIRCLE_RADIUS)
                 else:
-                    center = (center[0], center[1] - 2 * radius)
+                    center = (center[0], center[1] - 2 * CIRCLE_RADIUS)
             
     def draw(self, screen):
         pygame.draw.polygon(screen, self.color, [self.x, self.y, self.z])
@@ -134,19 +144,21 @@ def build_shapes():
 
     median_width = SCREEN_WIDTH * 0.003
 
-    border_width = (SCREEN_WIDTH * 0.90 - median_width) / 2
+    border_width = (SCREEN_WIDTH * 0.85 - median_width) / 2
     border_height = SCREEN_HEIGHT * 0.90
 
-    left_border_x = SCREEN_WIDTH * 0.05
+    left_border_x = SCREEN_WIDTH * 0.03
     left_border_y = SCREEN_HEIGHT * 0.05
 
-    right_border_x = SCREEN_WIDTH * 0.05 + border_width + median_width
+    right_border_x = SCREEN_WIDTH * 0.03 + border_width + median_width
     right_border_y = SCREEN_HEIGHT * 0.05
     
     shapes['left_border'] = pygame.Rect(left_border_x, left_border_y, border_width, border_height)
     shapes['right_border'] = pygame.Rect(right_border_x, right_border_y, border_width, border_height)
+    shapes['finish_rect'] = pygame.Rect(right_border_x + border_width + 0.02 * SCREEN_WIDTH, right_border_y, SCREEN_WIDTH * 0.06, border_height)
+    shapes['finish_red'] = shapes['finish_white'] = 0
 
-    rect_width = border_width * 0.92
+    rect_width = border_width * 0.922
     rect_height = border_height * 0.94
 
     left_rect_x = left_border_x + border_width * 0.04
@@ -219,7 +231,6 @@ def build_shapes():
         shapes['triangles'].append(Triangle(x, y, z, DARK_LIGHT[i % 2]))
     
     shapes['circles'] = []
-    Circle.radius = 0.38 * (y[0] - x[0])
     for i in range(len(INIT_CIRCLES)):
         shapes['circles'].append(Circle(INIT_CIRCLES[i][1]))
         shapes['triangles'][INIT_CIRCLES[i][0]].add_circle(shapes['circles'][-1])
@@ -235,6 +246,7 @@ def draw_table(screen):
 
     pygame.draw.rect(screen, BORDER_COLOR, shapes['left_border'])
     pygame.draw.rect(screen, BORDER_COLOR, shapes['right_border'])
+    draw_finish(screen)
 
     pygame.draw.rect(screen, TABLE_COLOR, shapes['left_rect'])
     pygame.draw.rect(screen, TABLE_COLOR, shapes['right_rect'])
@@ -252,6 +264,34 @@ def draw_table(screen):
         circle.draw(screen)
     if hasattr(Circle, 'dragged'):
         Circle.dragged.draw(screen)
+
+def draw_finish(screen):
+    rect = shapes['finish_rect']
+    pygame.draw.rect(screen, FINISH_COLOR, rect)
+
+    max_height = rect.height / 2.2
+    redcenter = (rect.x + rect.width / 2, rect.y + CIRCLE_RADIUS)
+    whitecenter = (rect.x + rect.width / 2, rect.y + rect.height - CIRCLE_RADIUS)
+
+    if 2 * CIRCLE_RADIUS * shapes['finish_red'] > max_height:
+        for _ in range(shapes['finish_red']):
+            offset = max_height / shapes['finish_red']
+            pygame.draw.circle(screen, RED, redcenter, CIRCLE_RADIUS)
+            redcenter = (redcenter[0], redcenter[1] + offset)
+    else:
+        for _ in range(shapes['finish_red']):
+            pygame.draw.circle(screen, RED, redcenter, CIRCLE_RADIUS)
+            redcenter = (redcenter[0], redcenter[1] + 2 * CIRCLE_RADIUS)
+
+    if 2 * CIRCLE_RADIUS * shapes['finish_white'] > max_height:
+        for _ in range(shapes['finish_white']):
+            offset = max_height / shapes['finish_white']
+            pygame.draw.circle(screen, WHITE, whitecenter, CIRCLE_RADIUS)
+            whitecenter = (whitecenter[0], whitecenter[1] - offset)
+    else:
+        for _ in range(shapes['finish_white']):
+            pygame.draw.circle(screen, WHITE, whitecenter, CIRCLE_RADIUS)
+            whitecenter = (whitecenter[0], whitecenter[1] - 2 * CIRCLE_RADIUS)
 
 def roll_dice():
     return random.randint(1, 6), random.randint(1, 6)
