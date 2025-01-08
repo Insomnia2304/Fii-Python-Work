@@ -19,9 +19,9 @@ class Circle:
     def set_center(self, center):
         self.x = center[0]
         self.y = center[1]
-    def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (self.x, self.y), CIRCLE_RADIUS)
     def handle_event(self, event):
+        if self.finish:
+            return
         if event.type == pygame.MOUSEBUTTONDOWN and self.on_top:
             dist = ((self.x - event.pos[0])**2 + (self.y - event.pos[1])**2) ** 0.5
             if dist <= CIRCLE_RADIUS:
@@ -31,6 +31,7 @@ class Circle:
                 self.offset_y = self.y - event.pos[1]
                 self.original_x = self.x
                 self.original_y = self.y
+                print('dragging')
 
         elif event.type == pygame.MOUSEBUTTONUP and self.dragging:
             self.dragging = Circle.is_dragging = False
@@ -78,6 +79,8 @@ class Triangle:
         self.circles.append(circle)
         self.compute_circles_positions()
     def remove_circle(self):
+        if len(self.circles) == 0:
+            return
         circle = self.circles.pop()
         if len(self.circles) > 0:
             self.circles[-1].on_top = True
@@ -156,7 +159,10 @@ def build_shapes():
     shapes['left_border'] = pygame.Rect(left_border_x, left_border_y, border_width, border_height)
     shapes['right_border'] = pygame.Rect(right_border_x, right_border_y, border_width, border_height)
     shapes['finish_rect'] = pygame.Rect(right_border_x + border_width + 0.02 * SCREEN_WIDTH, right_border_y, SCREEN_WIDTH * 0.06, border_height)
+    
     shapes['finish_red'] = shapes['finish_white'] = 0
+    shapes['eaten_red'] = []
+    shapes['eaten_red'] = []
 
     rect_width = border_width * 0.922
     rect_height = border_height * 0.94
@@ -292,6 +298,21 @@ def draw_finish(screen):
         for _ in range(shapes['finish_white']):
             pygame.draw.circle(screen, WHITE, whitecenter, CIRCLE_RADIUS)
             whitecenter = (whitecenter[0], whitecenter[1] - 2 * CIRCLE_RADIUS)
+
+def arrange_eaten(screen):
+    rect1 = shapes['left_rect']
+    rect2 = shapes['right_rect']
+
+    redcenter = (rect1.right + (rect2.x - rect1.right / 2), rect1.y + rect1.height - 2 * CIRCLE_RADIUS)
+    whitecenter = (rect1.right + (rect2.x - rect1.right / 2),  rect1.y + rect1.height + 2 * CIRCLE_RADIUS)
+
+    for circle in shapes['eaten_red']:
+        circle.set_center(redcenter)
+        redcenter = (redcenter[0], redcenter[1] - 2 * CIRCLE_RADIUS)
+
+    for circle in shapes['eaten_white']:
+        circle.set_center(whitecenter)
+        whitecenter = (whitecenter[0], whitecenter[1] + 2 * CIRCLE_RADIUS)
 
 def roll_dice():
     return random.randint(1, 6), random.randint(1, 6)
