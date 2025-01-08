@@ -6,42 +6,58 @@ from constants import *
 from utils import *
 
 shapes = {}
+game_state = {}
 
 class Circle:
     is_dragging = False
     def __init__(self, color):
-        self.color = color
+        self.color = self.original_color = color
         self.dragging = False
         self.on_top = False
         self.finish = False
+        self.eaten = False
     def set_father(self, father):
         self.father = father
     def set_center(self, center):
         self.x = center[0]
         self.y = center[1]
     def handle_event(self, event):
-        if self.finish:
+        if self.finish or self.color != GREEN:
             return
         if event.type == pygame.MOUSEBUTTONDOWN and self.on_top:
             dist = ((self.x - event.pos[0])**2 + (self.y - event.pos[1])**2) ** 0.5
             if dist <= CIRCLE_RADIUS:
+                if self in shapes['eaten_red']:
+                    shapes['eaten_red'].remove(self)
+                    self.eaten = True
+                if self in shapes['eaten_white']:
+                    shapes['eaten_white'].remove(self)
+                    self.eaten = True
                 Circle.dragged = self
                 self.dragging = Circle.is_dragging = True
                 self.offset_x = self.x - event.pos[0]
                 self.offset_y = self.y - event.pos[1]
                 self.original_x = self.x
                 self.original_y = self.y
-                print('dragging')
+
+                for index in self.to_move:
+                    shapes['triangles'][index].color = GREEN
 
         elif event.type == pygame.MOUSEBUTTONUP and self.dragging:
             self.dragging = Circle.is_dragging = False
+            Circle.dragged = None
 
             found = False
-            for triangle in shapes['triangles']:
-                if circle_fit_into_triangle(self, triangle):
+            for index in self.to_move:
+                if circle_fit_into_triangle(self, shapes['triangles'][index]):
+                    if len(shapes['triangles'][index].circles) == 1 and shapes['triangles'][index].circles[-1].original_color != self.original_color:
+                        shapes['eaten_' + ('red' if self.original_color == WHITE else 'white')].append(shapes['triangles'][index].remove_circle())
                     self.father.remove_circle()
-                    triangle.add_circle(self)
+                    shapes['triangles'][index].add_circle(self)
                     found = True
+                    self.color = self.original_color
+                    update_moves(self.to_move[index])
+                    highlight_moves()
             
             if circle_fit_into_finish_rectangle(self, shapes['finish_rect']):
                 self.father.remove_circle()
@@ -55,7 +71,15 @@ class Circle:
             if not found:
                 self.x = self.original_x
                 self.y = self.original_y
-
+                if self.eaten:
+                    if self.original_color == WHITE:
+                        shapes['eaten_white'].append(self)
+                    else:
+                        shapes['eaten_red'].append(self)
+                    self.eaten = False
+        
+            for triangle in shapes['triangles']:
+                triangle.color = triangle.original_color
         elif event.type == pygame.MOUSEMOTION:
             if self.dragging:
                 self.x = event.pos[0] + self.offset_x
@@ -69,13 +93,15 @@ class Triangle:
         self.x = x
         self.y = y
         self.z = z
-        self.color = color
+        self.color = self.original_color = color
         self.circles = []
+    def set_index(self, index):
+        self.index = index
     def add_circle(self, circle):
-        circle.set_father(self)
-        circle.on_top = True
         if len(self.circles) > 0:
             self.circles[-1].on_top = False
+        circle.set_father(self)
+        circle.on_top = True
         self.circles.append(circle)
         self.compute_circles_positions()
     def remove_circle(self):
@@ -124,6 +150,7 @@ def init():
 
     prep_dices()
     build_shapes()
+    prep_game_state()
 
     return screen
 
@@ -162,7 +189,7 @@ def build_shapes():
     
     shapes['finish_red'] = shapes['finish_white'] = 0
     shapes['eaten_red'] = []
-    shapes['eaten_red'] = []
+    shapes['eaten_white'] = []
 
     rect_width = border_width * 0.922
     rect_height = border_height * 0.94
@@ -236,10 +263,15 @@ def build_shapes():
         z = (z[0] + rect_width / 6, z[1])
         shapes['triangles'].append(Triangle(x, y, z, DARK_LIGHT[i % 2]))
     
+    for i in range(24):
+        shapes['triangles'][i].set_index(i)
+    
     shapes['circles'] = []
     for i in range(len(INIT_CIRCLES)):
         shapes['circles'].append(Circle(INIT_CIRCLES[i][1]))
         shapes['triangles'][INIT_CIRCLES[i][0]].add_circle(shapes['circles'][-1])
+
+    shapes['left_dice_num'], shapes['right_dice_num'] = (6, 6)
 
     shapes['left_dice'] = shapes['dice_images'][1].get_rect()
     shapes['left_dice'].center = (shapes['right_border'].x + shapes['right_border'].width / 3, shapes['right_border'].centery)
@@ -247,6 +279,64 @@ def build_shapes():
     shapes['right_dice'] = shapes['dice_images'][1].get_rect()
     shapes['right_dice'].center = (shapes['left_dice'].midright[0] + shapes['left_dice'].width, shapes['right_border'].centery)
 
+def prep_game_state(game_type='multiplayer'):
+    game_state['type'] = game_type
+    game_state['move'] = RED
+    shapes['moves'] = []
+
+def highlight_moves():
+    move_found = False
+    for circle in shapes['circles']:
+        circle.color = circle.original_color
+
+    if shapes['moves'] == []:
+        return
+    
+    if shapes['eaten_red'] != [] and game_state['move'] == RED:
+        for circle in shapes['eaten_red']:
+            for move in set(shapes['moves']):
+                if len(shapes['triangles'][move-1].circles) == 0 or shapes['triangles'][move-1].circles[-1].original_color == game_state['move'] or (len(shapes['triangles'][move-1].circles) == 1 and shapes['triangles'][move-1].circles[-1].original_color != game_state['move']):
+                    circle.color = GREEN
+                    circle.to_move[move-1] = move
+                    move_found = True
+        if not move_found:
+            shapes['moves'] = [7]
+            update_moves(7)
+        return
+    
+    if shapes['eaten_white'] != [] and game_state['move'] == WHITE:
+        for circle in shapes['eaten_white']:
+            for move in set(shapes['moves']):
+                if len(shapes['triangles'][24 - move].circles) == 0 or shapes['triangles'][24 - move].circles[-1].original_color == game_state['move'] or (len(shapes['triangles'][24 - move].circles) == 1 and shapes['triangles'][24 - move].circles[-1].original_color != game_state['move']):
+                    circle.color = GREEN
+                    circle.to_move[24 - move] = move
+                    move_found = True
+        if not move_found:
+            shapes['moves'] = [7]
+            update_moves(7)
+        return
+
+    for circle in shapes['circles']:
+        circle.to_move = {}
+        if circle.on_top and circle.original_color == game_state['move']:
+            for move in set(shapes['moves']):
+                if game_state['move'] == RED:
+                    if circle.father.index + move < 24:
+                        if len(shapes['triangles'][circle.father.index + move].circles) == 0 or shapes['triangles'][circle.father.index + move].circles[-1].original_color == game_state['move'] or (len(shapes['triangles'][circle.father.index + move].circles) == 1 and shapes['triangles'][circle.father.index + move].circles[-1].original_color != game_state['move']):
+                            circle.color = GREEN
+                            circle.to_move[circle.father.index + move] = move
+                            move_found = True
+                elif game_state['move'] == WHITE:
+                    if circle.father.index - move >= 0:
+                        if len(shapes['triangles'][circle.father.index - move].circles) == 0 or shapes['triangles'][circle.father.index - move].circles[-1].original_color == game_state['move'] or (len(shapes['triangles'][circle.father.index - move].circles) == 1 and shapes['triangles'][circle.father.index - move].circles[-1].original_color != game_state['move']):
+                            circle.color = GREEN
+                            circle.to_move[circle.father.index - move] = move
+                            move_found = True
+
+    if not move_found:
+        shapes['moves'] = [7]
+        update_moves(7)
+            
 def draw_table(screen):
     screen.fill(BACKGROUND_COLOR)
 
@@ -268,8 +358,9 @@ def draw_table(screen):
 
     for circle in shapes['circles']:
         circle.draw(screen)
-    if hasattr(Circle, 'dragged'):
+    if hasattr(Circle, 'dragged') and Circle.dragged is not None:
         Circle.dragged.draw(screen)
+    arrange_eaten(screen)
 
 def draw_finish(screen):
     rect = shapes['finish_rect']
@@ -303,8 +394,8 @@ def arrange_eaten(screen):
     rect1 = shapes['left_rect']
     rect2 = shapes['right_rect']
 
-    redcenter = (rect1.right + (rect2.x - rect1.right / 2), rect1.y + rect1.height - 2 * CIRCLE_RADIUS)
-    whitecenter = (rect1.right + (rect2.x - rect1.right / 2),  rect1.y + rect1.height + 2 * CIRCLE_RADIUS)
+    redcenter = (rect1.right + (rect2.x - rect1.right) / 2, rect1.y + rect1.height * 1/3 - 2 * CIRCLE_RADIUS)
+    whitecenter = (rect1.right + (rect2.x - rect1.right) / 2,  rect1.y + rect1.height * 2/3 + 2 * CIRCLE_RADIUS)
 
     for circle in shapes['eaten_red']:
         circle.set_center(redcenter)
@@ -317,39 +408,56 @@ def arrange_eaten(screen):
 def roll_dice():
     return random.randint(1, 6), random.randint(1, 6)
 
+def get_moves():
+    shapes['moves'] = []
+    shapes['moves'].append(shapes['left_dice_num'])
+    shapes['moves'].append(shapes['right_dice_num'])
+    if shapes['left_dice_num'] == shapes['right_dice_num']:
+        shapes['moves'].append(shapes['left_dice_num'])
+        shapes['moves'].append(shapes['right_dice_num'])
+
+def update_moves(move):
+    shapes['moves'].remove(move)
+    if len(shapes['moves']) == 0:
+        print('Switching player')
+        game_state['move'] = RED if game_state['move'] == WHITE else WHITE
+
 def main():
     screen = init()
-
     rolling = False
-    shapes['left_dice_num'], shapes['right_dice_num'] = (6, 6)
 
     while True:
         draw_table(screen)
 
-        mouse_pos = pygame.mouse.get_pos()
-        if not Circle.is_dragging:
-            if shapes['left_dice'].collidepoint(mouse_pos) or shapes['right_dice'].collidepoint(mouse_pos):
-                pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND)
-            else:
-                pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_ARROW)
-
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
+            elif event.type == pygame.MOUSEBUTTONDOWN and not rolling and shapes['moves'] == []:
                 if shapes['left_dice'].collidepoint(event.pos) or shapes['right_dice'].collidepoint(event.pos):
                     rolling = True
                     start_time = pygame.time.get_ticks()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    prep_game_state('singleplayer')
+                    build_shapes()
+                    rolling = False
+                if event.key == pygame.K_m:
+                    prep_game_state('multiplayer')
+                    build_shapes()
+                    rolling = False
             for circle in shapes['circles']:
                 circle.handle_event(event)
 
         if rolling:
             elapsed_time = pygame.time.get_ticks() - start_time
             if elapsed_time < DICE_ROLL_TIME_MS:
-                dice1, dice2 = roll_dice()
-                shapes['left_dice_num'], shapes['right_dice_num'] = (dice1, dice2)
+                shapes['left_dice_num'], shapes['right_dice_num'] = roll_dice()
+                # shapes['left_dice_num'], shapes['right_dice_num'] = (3, 3)
             else:
+                get_moves()
+                highlight_moves()
                 rolling = False
 
         pygame.display.flip()
