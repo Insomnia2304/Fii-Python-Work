@@ -86,6 +86,7 @@ class Circle:
                 if circle_fit_into_triangle(self, shapes['triangles'][index]):
                     if len(shapes['triangles'][index].circles) == 1 and shapes['triangles'][index].circles[-1].original_color != self.original_color:
                         shapes['eaten_' + ('red' if self.original_color == WHITE else 'white')].append(shapes['triangles'][index].remove_circle())
+                    self.eaten = False
                     self.father.remove_circle()
                     shapes['triangles'][index].add_circle(self)
                     found = True
@@ -460,7 +461,7 @@ def draw_table(screen):
         circle.draw(screen)
     if hasattr(Circle, 'dragged') and Circle.dragged is not None:
         Circle.dragged.draw(screen)
-    arrange_eaten(screen)
+    arrange_eaten()
 
 """
 Draws the finish rectangle on the screen.
@@ -497,7 +498,7 @@ def draw_finish(screen):
 """
 Arranges the eaten circles on the screen.
 """
-def arrange_eaten(screen):
+def arrange_eaten():
     rect1 = shapes['left_rect']
     rect2 = shapes['right_rect']
 
@@ -535,7 +536,7 @@ Updates the moves structure based on the move made by the player.
 def update_moves(move):
     shapes['moves'].remove(move)
     if len(shapes['moves']) == 0:
-        print('Switching player')
+        # print('Switching player')
         game_state['move'] = RED if game_state['move'] == WHITE else WHITE
 
 """
@@ -566,6 +567,9 @@ def main():
                     prep_game_state('multiplayer')
                     build_shapes()
                     rolling = False
+                if event.key == pygame.K_z and not rolling and shapes['moves'] == []:
+                    rolling = True
+                    start_time = pygame.time.get_ticks()
             for circle in shapes['circles']:
                 circle.handle_event(event)
 
