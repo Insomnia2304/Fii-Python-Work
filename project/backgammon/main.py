@@ -8,6 +8,21 @@ from utils import *
 shapes = {}
 game_state = {}
 
+"""
+A class representing a circle that can be dragged and moved across the screen.
+
+Attributes:
+    color (tuple): The color of the circle.
+    original_color (tuple): The original color of the circle.
+    dragging (bool): A flag indicating whether the circle is being dragged.
+    on_top (bool): A flag indicating whether the circle is on top of the stack.
+    finish (bool): A flag indicating whether the circle is in the finish rectangle.
+    eaten (bool): A flag indicating whether the circle is eaten.
+    father (Triangle): The triangle that the circle is currently on.
+    x (int): The x-coordinate of the circle.
+    y (int): The y-coordinate of the circle.
+    to_move (dict): A dictionary containing the triangles that the circle can move to.
+"""
 class Circle:
     is_dragging = False
     def __init__(self, color):
@@ -16,11 +31,29 @@ class Circle:
         self.on_top = False
         self.finish = False
         self.eaten = False
+    """
+    Sets the father of the circle.
+
+    Args:
+        father (Triangle): The triangle that the circle is currently on.
+    """
     def set_father(self, father):
         self.father = father
+    """
+    Sets the center of the circle.
+
+    Args:
+        center (tuple): The center of the circle.
+    """
     def set_center(self, center):
         self.x = center[0]
         self.y = center[1]
+    """
+    Handles the event.
+    
+    Args:
+        event (pygame.event): The event to be handled.
+    """
     def handle_event(self, event):
         if self.finish or self.color != GREEN:
             return
@@ -45,6 +78,7 @@ class Circle:
 
         elif event.type == pygame.MOUSEBUTTONUP and self.dragging:
             self.dragging = Circle.is_dragging = False
+            finished = False
             Circle.dragged = None
 
             found = False
@@ -58,8 +92,8 @@ class Circle:
                     self.color = self.original_color
                     update_moves(self.to_move[index])
                     highlight_moves()
-            
-            if circle_fit_into_finish_rectangle(self, shapes['finish_rect']):
+
+            if circle_fit_into_finish_rectangle(self, shapes['finish_rect']) and finished:
                 self.father.remove_circle()
                 self.finish = True
                 if self.color == WHITE:
@@ -84,10 +118,28 @@ class Circle:
             if self.dragging:
                 self.x = event.pos[0] + self.offset_x
                 self.y = event.pos[1] + self.offset_y
+    """
+    Draws the circle on the screen.
+
+    Args:
+        screen (pygame.Surface): The screen to draw the circle on.
+    """
     def draw(self, screen):
         if not self.finish:
             pygame.draw.circle(screen, self.color, (self.x, self.y), CIRCLE_RADIUS)
 
+"""
+A class representing a triangle that can contain circles.
+
+Attributes:
+    x (tuple): The x-coordinate of the triangle.
+    y (tuple): The y-coordinate of the triangle.
+    z (tuple): The z-coordinate of the triangle.
+    color (tuple): The color of the triangle.
+    original_color (tuple): The original color of the triangle.
+    circles (list): A list of circles on the triangle.
+    index (int): The index of the triangle.
+"""
 class Triangle:
     def __init__(self, x, y, z, color):
         self.x = x
@@ -95,8 +147,20 @@ class Triangle:
         self.z = z
         self.color = self.original_color = color
         self.circles = []
+    """
+    Sets the index of the triangle.
+    
+    Args:
+        index (int): The index of the triangle.
+    """
     def set_index(self, index):
         self.index = index
+    """
+    Adds a circle to the triangle.
+    
+    Args:
+        circle (Circle): The circle to be added.
+    """
     def add_circle(self, circle):
         if len(self.circles) > 0:
             self.circles[-1].on_top = False
@@ -104,6 +168,9 @@ class Triangle:
         circle.on_top = True
         self.circles.append(circle)
         self.compute_circles_positions()
+    """
+    Removes the top circle from the triangle.
+    """
     def remove_circle(self):
         if len(self.circles) == 0:
             return
@@ -112,6 +179,9 @@ class Triangle:
             self.circles[-1].on_top = True
         self.compute_circles_positions()
         return circle
+    """
+    Computes the circles positions based on their number.
+    """
     def compute_circles_positions(self):
         circles_number = len(self.circles)
         if circles_number == 0:
@@ -138,10 +208,18 @@ class Triangle:
                     center = (center[0], center[1] + 2 * CIRCLE_RADIUS)
                 else:
                     center = (center[0], center[1] - 2 * CIRCLE_RADIUS)
-            
+    """
+    Draws the triangle on the screen.
+    
+    Args:
+        screen (pygame.Surface): The screen to draw the triangle on.
+    """
     def draw(self, screen):
         pygame.draw.polygon(screen, self.color, [self.x, self.y, self.z])
 
+"""
+Initializes the game. 
+"""
 def init():
     pygame.init()
 
@@ -154,6 +232,9 @@ def init():
 
     return screen
 
+"""
+Prepares the dice images and loads them. 
+"""
 def prep_dices():
     dice_images = {
     1: pygame.image.load('img/dice_1.png'),
@@ -169,6 +250,9 @@ def prep_dices():
     
     shapes['dice_images'] = dice_images
 
+"""
+Builds the shapes of the game.
+"""
 def build_shapes():
     global shapes
 
@@ -279,11 +363,20 @@ def build_shapes():
     shapes['right_dice'] = shapes['dice_images'][1].get_rect()
     shapes['right_dice'].center = (shapes['left_dice'].midright[0] + shapes['left_dice'].width, shapes['right_border'].centery)
 
+"""
+Prepares the game state.
+
+Args:
+    game_type (str): The type of the game. Default is 'multiplayer'.
+"""
 def prep_game_state(game_type='multiplayer'):
     game_state['type'] = game_type
     game_state['move'] = RED
     shapes['moves'] = []
 
+"""
+Highlights the possible moves for the current player. Includes possible moves for the circles and the destination triangles.
+"""
 def highlight_moves():
     move_found = False
     for circle in shapes['circles']:
@@ -336,7 +429,14 @@ def highlight_moves():
     if not move_found:
         shapes['moves'] = [7]
         update_moves(7)
-            
+
+
+"""
+Draws the table on the screen.
+
+Args:
+    screen (pygame.Surface): The screen to draw the table on.
+"""
 def draw_table(screen):
     screen.fill(BACKGROUND_COLOR)
 
@@ -362,6 +462,10 @@ def draw_table(screen):
         Circle.dragged.draw(screen)
     arrange_eaten(screen)
 
+"""
+Draws the finish rectangle on the screen.
+Makes sure that circles are drawn in the finish rectangle based on their number.
+"""
 def draw_finish(screen):
     rect = shapes['finish_rect']
     pygame.draw.rect(screen, FINISH_COLOR, rect)
@@ -390,6 +494,9 @@ def draw_finish(screen):
             pygame.draw.circle(screen, WHITE, whitecenter, CIRCLE_RADIUS)
             whitecenter = (whitecenter[0], whitecenter[1] - 2 * CIRCLE_RADIUS)
 
+"""
+Arranges the eaten circles on the screen.
+"""
 def arrange_eaten(screen):
     rect1 = shapes['left_rect']
     rect2 = shapes['right_rect']
@@ -405,9 +512,15 @@ def arrange_eaten(screen):
         circle.set_center(whitecenter)
         whitecenter = (whitecenter[0], whitecenter[1] + 2 * CIRCLE_RADIUS)
 
+"""
+Rolls the dice. Uses the random module to generate random numbers between 1 and 6.
+"""
 def roll_dice():
     return random.randint(1, 6), random.randint(1, 6)
 
+"""
+Gets the possible moves for the current player.
+"""
 def get_moves():
     shapes['moves'] = []
     shapes['moves'].append(shapes['left_dice_num'])
@@ -416,12 +529,18 @@ def get_moves():
         shapes['moves'].append(shapes['left_dice_num'])
         shapes['moves'].append(shapes['right_dice_num'])
 
+"""
+Updates the moves structure based on the move made by the player.
+"""
 def update_moves(move):
     shapes['moves'].remove(move)
     if len(shapes['moves']) == 0:
         print('Switching player')
         game_state['move'] = RED if game_state['move'] == WHITE else WHITE
 
+"""
+The main function of the game. This is where magic happens.
+"""
 def main():
     screen = init()
     rolling = False
